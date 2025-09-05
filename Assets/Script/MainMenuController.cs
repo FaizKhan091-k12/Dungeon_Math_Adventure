@@ -7,9 +7,11 @@ using UnityEngine.UI.ProceduralImage;
 
 public class MainMenuController : MonoBehaviour
 {
-    [Header("Debug Menu")]
+        [Header("Debug Menu")]
 
     [SerializeField] bool isMainMenu;
+    public WizardDialogue wizardDialogue;
+
 
     [Header("UI Elements")]
     [SerializeField] ProceduralImage transitionImage;
@@ -26,6 +28,7 @@ public class MainMenuController : MonoBehaviour
 
 
     [SerializeField] GameObject chapter_One;
+    [SerializeField] GameObject wizard_Canvas;
     void Start()
     {
         if (!isMainMenu) return;
@@ -34,6 +37,7 @@ public class MainMenuController : MonoBehaviour
         chapter1Icon.color = new Color(1, 1, 1, 0);
         chapter1Icon.gameObject.SetActive(false);
         chapter_One.SetActive(false);
+        wizard_Canvas.SetActive(false);
         playButton.onClick.AddListener(PlayButtonClicked);
     }
 
@@ -76,10 +80,10 @@ public class MainMenuController : MonoBehaviour
 
     IEnumerator FadeOut()
     {
-         float t = 0;
+        float t = 0;
 
-       
-         yield return new WaitForSeconds(4f);
+
+        yield return new WaitForSeconds(4f);
         //  while (t < 1)
         // {
         //     t += Time.deltaTime * fadeDuration * .8f;
@@ -89,7 +93,7 @@ public class MainMenuController : MonoBehaviour
         //     yield return null;
 
         // }
-   
+
         chapter1Icon.gameObject.SetActive(false);
         allAssetsMainMenu.SetActive(false);
         chapter_One.SetActive(true);
@@ -105,7 +109,9 @@ public class MainMenuController : MonoBehaviour
 
         }
         transitionImage.raycastTarget = false;
-  
-       
+        yield return new WaitForSeconds(1f);
+        wizard_Canvas.SetActive(true);
+        wizardDialogue.StartWizardDialogue();
+
     }
 }

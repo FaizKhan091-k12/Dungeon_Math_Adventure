@@ -1,5 +1,6 @@
 using UnityEngine;
 using Spine.Unity;
+using UnityEngine.XR;
 
 [RequireComponent(typeof(KnightControl))]
 public class ClickMoveXWithSpine : MonoBehaviour
@@ -7,6 +8,8 @@ public class ClickMoveXWithSpine : MonoBehaviour
     [Header("Movement")]
     public float speed = 5f;
     public float stopDistance = 0.01f;
+    public bool canMove;
+    public GameObject handIcon;
 
     private Vector3 targetPosition;
     private bool isMoving = false;
@@ -31,8 +34,28 @@ public class ClickMoveXWithSpine : MonoBehaviour
 
     void Update()
     {
+        if (canMove)
+        {
+            PlayerMovement();
+          
+        }
+        else { return; }
+       
+    }
+
+    public void CanMoveBool()
+    {
+        canMove = true;
+        
+    }
+    private void PlayerMovement()
+    {
         if (Input.GetMouseButtonDown(0))
         {
+            if (handIcon.activeInHierarchy)
+            {
+                handIcon.SetActive(false);
+            }
             Vector3 mouse = Input.mousePosition;
             Vector3 world = Camera.main.ScreenToWorldPoint(mouse);
 
