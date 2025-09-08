@@ -45,7 +45,7 @@ public class MainMenuController : MonoBehaviour
 
     IEnumerator FadeIn()
     {
-
+        playButton.interactable = false;
         transitionImage.raycastTarget = true;
         float t = 0;
 
