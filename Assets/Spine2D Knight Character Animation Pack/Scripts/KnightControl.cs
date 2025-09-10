@@ -85,7 +85,7 @@ public class KnightControl : MonoBehaviour
     }
     public void death()
     {
-        spineAnimationState.SetAnimation(0, deathAnimationName, true);
+        spineAnimationState.SetAnimation(0, deathAnimationName, false);
     }
     public void stun()
     {
@@ -113,7 +113,7 @@ public class KnightControl : MonoBehaviour
     }
     public void skill_3()
     {
-        spineAnimationState.SetAnimation(0, skillAnimationName_3, true);
+        spineAnimationState.SetAnimation(0, skillAnimationName_3, false);
     }
 
 }

@@ -1,5 +1,5 @@
 using System.Collections;
-
+using System.Timers;
 using UnityEngine;
 
 using UnityEngine.UI;
@@ -7,7 +7,8 @@ using UnityEngine.UI.ProceduralImage;
 
 public class MainMenuController : MonoBehaviour
 {
-        [Header("Debug Menu")]
+    public static MainMenuController Instacne;
+    [Header("Debug Menu")]
 
     [SerializeField] bool isMainMenu;
     public WizardDialogue wizardDialogue;
@@ -18,7 +19,7 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] ProceduralImage chapter1Icon;
     [SerializeField] ParticleSystem[] particles;
     [SerializeField] Button playButton;
-    public   float fadeDuration;
+    public float fadeDuration;
 
     [Header("Player Settings")]
     [SerializeField] Transform player;
@@ -29,8 +30,15 @@ public class MainMenuController : MonoBehaviour
 
     [SerializeField] GameObject chapter_One;
     [SerializeField] GameObject wizard_Canvas;
-    void Start()
+
+    [Header("Audio Files")]
+    [SerializeField] public AudioSource audio_MainMenu;
+    [SerializeField] public AudioSource audio_Doom;
+    [SerializeField] public AudioSource audio_LevelOne;
+    void Awake()
     {
+        Instacne = this;
+
         if (!isMainMenu) return;
         transitionImage.material.renderQueue = 3500;
         chapter1Icon.material.renderQueue = 3500;
@@ -55,6 +63,7 @@ public class MainMenuController : MonoBehaviour
             Color tempColor = transitionImage.color;
             tempColor.a = Mathf.Lerp(0, 1, t);
             transitionImage.color = tempColor;
+            audio_MainMenu.volume = Mathf.Lerp(audio_MainMenu.volume, 0, t * .02f);
             yield return null;
 
         }
@@ -64,6 +73,9 @@ public class MainMenuController : MonoBehaviour
         }
         yield return new WaitForSeconds(1);
         chapter1Icon.gameObject.SetActive(true);
+        audio_Doom.Play();
+        audio_MainMenu.volume = 0f;
+
         // t = 0f;
         // while (t < 1)
         // {
@@ -105,13 +117,32 @@ public class MainMenuController : MonoBehaviour
             Color tempColor = transitionImage.color;
             tempColor.a = Mathf.Lerp(1, 0, t);
             transitionImage.color = tempColor;
+            audio_LevelOne.volume = Mathf.Lerp(audio_MainMenu.volume, .2f, t);
             yield return null;
+
 
         }
         transitionImage.raycastTarget = false;
         yield return new WaitForSeconds(1f);
         wizard_Canvas.SetActive(true);
+        audio_LevelOne.volume = 0.2f;
         wizardDialogue.StartWizardDialogue();
 
+    }
+
+
+    public void WizardDialoguesFinish()
+    {
+        StartCoroutine(LevelOneAudio());
+    }
+    IEnumerator LevelOneAudio()
+    {
+        float t = 0f;
+        while (t < 1)
+        {
+            t += Time.deltaTime * .85f;
+            audio_LevelOne.volume = Mathf.Lerp(audio_LevelOne.volume, .35f, t);
+            yield return null;
+        }
     }
 }
