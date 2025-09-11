@@ -164,6 +164,14 @@ public class ClickMoveXWithSpine : MonoBehaviour
 
             // play death via wrapper so lastAnim updates
             PlayDeath();
+            onPlayerDied?.Invoke();
+
+            // fade back to Main Menu
+            if (SceneTransition.Instance != null)
+            {
+                SceneTransition.Instance.FadeAndLoad("Demo");
+            }
+
 
             // disable movement & input
             canMove = false;
@@ -703,6 +711,10 @@ public class ClickMoveXWithSpine : MonoBehaviour
     public void PlayDoorAnimation()
     {
         doorAnimation.Play();
+        if (Camera.main != null)
+        {
+            Camera.main.transform.DOShakePosition(4.5f, strength: new Vector3(0.25f, 0.25f, 0), vibrato: 10);
+        }
     }
 
     void DestroyAllProjectiles()
@@ -735,95 +747,100 @@ public class ClickMoveXWithSpine : MonoBehaviour
         return true;
     }
     #endregion
-    
+
     /// <summary>
-/// Force the player to abandon current state and walk to `portalPos`.
-/// First moves on X (playing Run), then moves on Y (playing Idle by default).
-/// Disables player input while moving. Use StartCoroutine(GoToPortal(target)) to call.
-/// </summary>
-public IEnumerator GoToPortal(Vector3 portalPos, float moveSpeedOverride = -1f, float arrivalThreshold = 0.02f, float pauseAfterX = 0.12f)
-{
-    // Stop any current movement and states
-    if (movementCoroutine != null)
+    /// Force the player to abandon current state and walk to `portalPos`.
+    /// First moves on X (playing Run), then moves on Y (playing Idle by default).
+    /// Disables player input while moving. Use StartCoroutine(GoToPortal(target)) to call.
+    /// </summary>
+    public IEnumerator GoToPortal(Vector3 portalPos, float moveSpeedOverride = -1f, float arrivalThreshold = 0.02f, float pauseAfterX = 0.12f)
     {
-        StopCoroutine(movementCoroutine);
-        movementCoroutine = null;
-    }
+        // Stop any current movement and states
+        if (movementCoroutine != null)
+        {
+            StopCoroutine(movementCoroutine);
+            movementCoroutine = null;
+        }
 
-    // Stop blink and invuln visuals
-    if (blinkTween != null && blinkTween.IsActive())
-    {
-        blinkTween.Kill();
-        blinkTween = null;
-    }
-    if (knightMaterial != null && knightMaterial.HasProperty("_FillPhase"))
-        knightMaterial.SetFloat("_FillPhase", blinkMin);
+        // Stop blink and invuln visuals
+        if (blinkTween != null && blinkTween.IsActive())
+        {
+            blinkTween.Kill();
+            blinkTween = null;
+        }
+        if (knightMaterial != null && knightMaterial.HasProperty("_FillPhase"))
+            knightMaterial.SetFloat("_FillPhase", blinkMin);
 
-    // Immediately prevent gameplay input and question flow
-    canMove = false;
-    acceptingAnswer = false;
+        // Immediately prevent gameplay input and question flow
+        canMove = false;
+        acceptingAnswer = false;
 
-    // Stop any typing or question coroutines if needed
-    // (If you have references to them, stop here. We assume StartCoroutine(TypeText(...)) isn't stored.)
+        // Stop any typing or question coroutines if needed
+        // (If you have references to them, stop here. We assume StartCoroutine(TypeText(...)) isn't stored.)
 
-    // Face the target X
-    bool faceRight = portalPos.x >= transform.position.x;
-    SetFacing(faceRight);
+        // Face the target X
+        bool faceRight = portalPos.x >= transform.position.x;
+        SetFacing(faceRight);
 
-    // Use override speed if provided
-    float originalSpeed = speed;
-    if (moveSpeedOverride > 0f) speed = moveSpeedOverride;
+        // Use override speed if provided
+        float originalSpeed = speed;
+        if (moveSpeedOverride > 0f) speed = moveSpeedOverride;
 
-    // Force run animation and track movement target
-    movementTargetX = portalPos.x;
-    PlayRun();
+        // Force run animation and track movement target
+        movementTargetX = portalPos.x;
+        PlayRun();
 
-    // Move along X axis until reached
-    while (Mathf.Abs(transform.position.x - portalPos.x) > arrivalThreshold)
-    {
-        // move only in X
-        float step = speed * Time.deltaTime;
-        float newX = Mathf.MoveTowards(transform.position.x, portalPos.x, step);
-        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
+        // Move along X axis until reached
+        while (Mathf.Abs(transform.position.x - portalPos.x) > arrivalThreshold)
+        {
+            // move only in X
+            float step = speed * Time.deltaTime;
+            float newX = Mathf.MoveTowards(transform.position.x, portalPos.x, step);
+            transform.position = new Vector3(newX, transform.position.y, transform.position.z);
 
-        // ensure no accidental rotation
-        Vector3 e = transform.eulerAngles;
-        e.z = 0f;
-        transform.eulerAngles = e;
+            // ensure no accidental rotation
+            Vector3 e = transform.eulerAngles;
+            e.z = 0f;
+            transform.eulerAngles = e;
 
-        yield return null;
-    }
+            yield return null;
+        }
 
-    // Snap X exactly
-    transform.position = new Vector3(portalPos.x, transform.position.y, portalPos.z);
+        // Snap X exactly
+        transform.position = new Vector3(portalPos.x, transform.position.y, portalPos.z);
 
-    // tiny pause so it feels like player arrived
-    yield return new WaitForSeconds(pauseAfterX);
+        // tiny pause so it feels like player arrived
+        yield return new WaitForSeconds(pauseAfterX);
 
-    // Now move on Y (climb into portal). We'll play Idle (or you can change to a climb animation)
-    // Optionally face Y direction doesn't matter for X-facing, but ensure facing correct X.
-    PlayIdle();
+        // Now move on Y (climb into portal). We'll play Idle (or you can change to a climb animation)
+        // Optionally face Y direction doesn't matter for X-facing, but ensure facing correct X.
+        PlayIdle();
 
-    // Move Y to portal.y
-    while (Mathf.Abs(transform.position.y - portalPos.y) > arrivalThreshold)
-    {
-        float step = speed * Time.deltaTime;
-        float newY = Mathf.MoveTowards(transform.position.y, portalPos.y, step);
-        transform.position = new Vector3(transform.position.x, newY, transform.position.z);
-        yield return null;
-    }
+        // Move Y to portal.y
+        while (Mathf.Abs(transform.position.y - portalPos.y) > arrivalThreshold)
+        {
+            float step = speed * Time.deltaTime;
+            float newY = Mathf.MoveTowards(transform.position.y, portalPos.y, step);
+            transform.position = new Vector3(transform.position.x, newY, transform.position.z);
+            yield return null;
+        }
 
-    // Snap final position
-    transform.position = new Vector3(portalPos.x, portalPos.y, portalPos.z);
+        // Snap final position
+        transform.position = new Vector3(portalPos.x, portalPos.y, portalPos.z);
 
-    // restore speed if we overrode it
-    if (moveSpeedOverride > 0f) speed = originalSpeed;
+        // restore speed if we overrode it
+        if (moveSpeedOverride > 0f) speed = originalSpeed;
 
         // final idle (or you can trigger a 'enter portal' animation or call a level end)
         PlayBuff();
 
-    // (Optional) allow external code to continue; we keep player input disabled so the scene end can play.
-    // If you want to re-enable movement after arriving, set canMove = true here.
-}
+        // (Optional) allow external code to continue; we keep player input disabled so the scene end can play.
+        // If you want to re-enable movement after arriving, set canMove = true here.
+    }
 
+    public void CameraShake()
+    {
+         
+
+    }
 }
