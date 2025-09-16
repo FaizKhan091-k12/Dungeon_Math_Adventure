@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 62582572bed1ad24c8f2bdca95ed0016
+guid: 9fa7f08902a0c984585547345cf61143
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -8923187719069629783
-    second: TORXCh_0
+      213: 2092984402490002054
+    second: vs+_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -139,13 +139,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: TORXCh_0
+      name: vs+_0
       rect:
         serializedVersion: 2
-        x: 290
-        y: 256
-        width: 447
-        height: 500
+        x: 0
+        y: 0
+        width: 1536
+        height: 1024
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -154,8 +154,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 9a20abceb087a2480800000000000000
-      internalID: -8923187719069629783
+      spriteID: 68a89d69936cb0d10800000000000000
+      internalID: 2092984402490002054
       vertices: []
       indices: 
       edges: []
@@ -174,7 +174,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      TORXCh_0: -8923187719069629783
+      vs+_0: 2092984402490002054
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

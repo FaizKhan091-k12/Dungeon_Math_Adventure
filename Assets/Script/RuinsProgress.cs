@@ -24,38 +24,78 @@ public class RuinsProgress : MonoBehaviour
     // internal
     int filledCount = 0; // how many runes fully filled (0..maxRunesToFill)
 
-
-    void Start()
+    [SerializeField] GameObject[] particles;
+   void Start()
+{
+    // Optional validation
+    if (maxRunesToFill <= 0) maxRunesToFill = Mathf.Max(1, runes.Count);
+    // initialize all to 0
+    for (int i = 0; i < runes.Count; i++)
     {
-        // Optional validation
-        if (maxRunesToFill <= 0) maxRunesToFill = Mathf.Max(1, runes.Count);
-        // initialize all to 0
-        for (int i = 0; i < runes.Count; i++)
-        {
-            SetFillInstant(runes[i], 0f);
-        }
-        filledCount = 0;
+        SetFillInstant(runes[i], 0f);
     }
+    filledCount = 0;
 
-    // PUBLIC API — call this on correct answer
-    public void OnCorrectAnswer()
+    // Ensure particles array safe and turn them off initially
+    if (particles != null)
     {
-        if (filledCount >= maxRunesToFill) return;
-
-        // pick the next rune index (bottom->top)
-        int idx = filledCount;
-        if (idx < 0 || idx >= runes.Count) return;
-
-        // animate fill 0 -> 1
-        AnimateSetFill(runes[idx], 1f, fillTweenTime, fillEase);
-        filledCount++;
-
-        // Optionally do something when fully complete
-        if (filledCount >= maxRunesToFill)
+        for (int i = 0; i < particles.Length; i++)
         {
-            OnAllRunesFilled();
+            if (particles[i] != null) particles[i].SetActive(false);
         }
     }
+}
+
+// PUBLIC API — call this on correct answer
+public void OnCorrectAnswer()
+{
+    if (filledCount >= maxRunesToFill) return;
+
+    // pick the next rune index (bottom->top)
+    int idx = filledCount;
+    if (idx < 0 || idx >= runes.Count) return;
+
+    // animate fill 0 -> 1
+    AnimateSetFill(runes[idx], 1f, fillTweenTime, fillEase);
+    filledCount++;
+
+    // Activate particle for the rune just lit
+    ActivateParticleForRune(filledCount);
+
+    // Optionally do something when fully complete
+    if (filledCount >= maxRunesToFill)
+    {
+        OnAllRunesFilled();
+    }
+}
+
+void ActivateParticleForRune(int currentFilledCount)
+{
+    // currentFilledCount is the number of runes now filled (1..N)
+    if (particles == null || particles.Length == 0) return;
+
+    // index of particle corresponding to the rune that was just lit:
+    int particleIndex = currentFilledCount - 1;
+
+    if (particleIndex < 0 || particleIndex >= particles.Length) return;
+
+    GameObject p = particles[particleIndex];
+    if (p == null) return;
+
+    // Ensure the GameObject is active before trying to play the ParticleSystem
+    if (!p.activeSelf) p.SetActive(true);
+
+    var ps = p.GetComponent<ParticleSystem>();
+    if (ps != null)
+    {
+        // cross-version safe restart
+        ps.Stop();     // stops emission and simulation
+        ps.Clear();    // remove any existing particles
+        ps.Play();     // start emitting anew
+    }
+}
+
+
 
     // PUBLIC API — call this on wrong answer
     // Behavior: if there's at least one filled rune, unfill the last filled rune (topmost filled)

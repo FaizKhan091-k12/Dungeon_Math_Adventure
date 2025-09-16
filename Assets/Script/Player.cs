@@ -7,7 +7,7 @@ using TMPro;
 using DG.Tweening;
 using UnityEngine.EventSystems;
 using UnityEngine.UI.ProceduralImage;
-using UnityEditor.Rendering;
+
 
 [RequireComponent(typeof(KnightControl))]
 public class ClickMoveXWithSpine : MonoBehaviour
@@ -15,6 +15,13 @@ public class ClickMoveXWithSpine : MonoBehaviour
     public static ClickMoveXWithSpine Instance;
     public Animation ruinsAnimation;
     public Animation doorAnimation;
+    [Header("Result Popup")]
+public TMP_Text centerResultText;      // assign a centered TMP text in inspector
+public float popupFadeInTime = 0.12f;
+public float popupScaleUp = 1.25f;
+public float popupScaleTime = 0.18f;
+public float popupHoldTime = 0.6f;
+public float popupFadeOutTime = 0.18f;
     public RuinsProgress ruinsProgress;
     [Header("Movement")]
     public float speed = 5f;
@@ -63,7 +70,7 @@ public class ClickMoveXWithSpine : MonoBehaviour
     [Header("Gameplay Settings")]
     public int minNumber = 1;
     public int maxNumber = 100;
-    public int maxQuestions = 5;                  // how many numbers to ask in this level
+    public int maxQuestions = 5;                  // legacy, not used for two-phase flow
     public float timeBetweenQuestions = 0.4f;     // delay after answering before next question
     public float numberFadeTime = 0.25f;
 
@@ -85,13 +92,25 @@ public class ClickMoveXWithSpine : MonoBehaviour
     private string lastAnim = "";
 
     // Internal state for the question flow
-    int currentQuestionIndex = 0;
+    int currentQuestionIndex = 0; // (kept for legacy if used elsewhere)
     int currentNumber = 0;
     bool acceptingAnswer = false;
     // track current X target so we can resume run animation after stun
     private float movementTargetX;
 
     public bool temp;
+
+    // Two-phase question flow settings
+    [Header("Question Flow Settings")]
+    public int parityCorrectRequired = 4;     // number of correct parity answers before switching to prime questions
+    public int primeCorrectRequired = 4;      // number of correct prime answers to finish level
+
+    enum QuestionPhase { Parity, Prime, Done }
+    private QuestionPhase phase = QuestionPhase.Parity;
+    private int parityCorrectCount = 0;
+    private int primeCorrectCount = 0;
+    private int parityQuestionIndex = 0; // how many parity questions shown
+    private int primeQuestionIndex = 0;  // how many prime questions shown
 
     void Awake()
     {
@@ -103,13 +122,11 @@ public class ClickMoveXWithSpine : MonoBehaviour
         // Start idle
         PlayIdle();
 
-        //   Debug.Log($"[Player] ClickMoveXWithSpine started. knight={(knight != null)}, gameObject.layer={gameObject.layer}");
         // At end of Start() or after you've referenced bigNumberText:
         if (bigNumberText != null)
         {
             bigNumberOriginalColor = bigNumberText.color;
         }
-
 
         // Ensure initial facing matches skeleton scale
         if (knight != null && knight.skeleton != null)
@@ -144,6 +161,57 @@ public class ClickMoveXWithSpine : MonoBehaviour
         {
             item.GetComponent<Animator>().enabled = false;
         }
+
+        SetupPhaseUI();
+    }
+
+
+    void SetupPhaseUI()
+    {
+        phase = QuestionPhase.Parity;
+        parityCorrectCount = 0;
+        primeCorrectCount = 0;
+        parityQuestionIndex = 0;
+        primeQuestionIndex = 0;
+
+        // Parity phase: enable odd/even buttons, hide prime button
+        if (oddButton != null) { SetButtonLabel(oddButton, "Odd"); oddButton.gameObject.SetActive(true); }
+        if (evenButton != null) { SetButtonLabel(evenButton, "Even"); evenButton.gameObject.SetActive(true); }
+        if (primeButton != null) primeButton.gameObject.SetActive(false);
+
+        // optional question banner
+        if (questionText != null) questionText.text = $"Question 0/{parityCorrectRequired}: Odd or Even?";
+    }
+
+    void SwitchToPrimePhase()
+    {
+        phase = QuestionPhase.Prime;
+        primeCorrectCount = 0;
+        primeQuestionIndex = 0;
+
+        // Repurpose odd/even as Yes/No for prime question
+        if (oddButton != null) { SetButtonLabel(oddButton, "Yes"); oddButton.gameObject.SetActive(true); }
+        if (evenButton != null) { SetButtonLabel(evenButton, "No"); evenButton.gameObject.SetActive(true); }
+        if (primeButton != null) primeButton.gameObject.SetActive(false);
+
+        // update question banner for prime start
+        if (questionText != null) questionText.text = $"Question 0/{primeCorrectRequired}: Is it prime?";
+    }
+
+    void FinishQuestions()
+    {
+        phase = QuestionPhase.Done;
+        EndQuestions();
+    }
+
+    // helper to set text label on a Button (TMP or legacy Text)
+    void SetButtonLabel(Button b, string label)
+    {
+        if (b == null) return;
+        TMP_Text tmp = b.GetComponentInChildren<TMP_Text>();
+        if (tmp != null) { tmp.text = label; return; }
+        Text t = b.GetComponentInChildren<Text>();
+        if (t != null) t.text = label;
     }
 
     public bool IsInvulnerable => isInvulnerable; // public getter
@@ -171,7 +239,6 @@ public class ClickMoveXWithSpine : MonoBehaviour
             {
                 SceneTransition.Instance.FadeAndLoad("Demo");
             }
-
 
             // disable movement & input
             canMove = false;
@@ -329,12 +396,6 @@ public class ClickMoveXWithSpine : MonoBehaviour
     {
         // Enable movement control if needed
         canMove = true;
-
-
-
-
-
-
     }
 
     IEnumerator PopButtonsThenStartQuestions()
@@ -360,7 +421,7 @@ public class ClickMoveXWithSpine : MonoBehaviour
         if (questionText != null)
         {
             questionText.gameObject.SetActive(true);
-            yield return StartCoroutine(TypeText(questionText, "Which number is this?"));
+            yield return StartCoroutine(TypeText(questionText, $"Question {parityQuestionIndex}/{parityCorrectRequired}: Odd or Even?"));
         }
 
         // Enable any animators on buttons
@@ -374,22 +435,16 @@ public class ClickMoveXWithSpine : MonoBehaviour
             item.GetComponent<Animator>().enabled = true;
         }
         // Start asking numbers
-        currentQuestionIndex = 0;
         yield return new WaitForSeconds(0.15f);
         NextQuestion();
     }
 
     private void PlayerMovement()
     {
-
         // Mouse click / touch only processed when not clicking on UI
         // Mouse
         if (Input.GetMouseButtonDown(0))
         {
-
-
-
-
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
                 return;
 
@@ -406,7 +461,6 @@ public class ClickMoveXWithSpine : MonoBehaviour
             PlayRun();
 
             // before starting movement
-            // before starting movement
             playerHasMoved = true; // mark that player moved at least once
 
             // store the movement target so we can check later
@@ -415,8 +469,6 @@ public class ClickMoveXWithSpine : MonoBehaviour
             if (movementCoroutine != null)
                 StopCoroutine(movementCoroutine);
             movementCoroutine = StartCoroutine(MoveToX(targetPosition.x));
-
-
         }
 
         // Touch
@@ -438,20 +490,17 @@ public class ClickMoveXWithSpine : MonoBehaviour
 
                 PlayRun();
 
-                // ... after computing targetPosition and PlayRun()
                 movementTargetX = targetPosition.x;
 
                 if (movementCoroutine != null)
                     StopCoroutine(movementCoroutine);
                 movementCoroutine = StartCoroutine(MoveToX(targetPosition.x));
-
             }
         }
     }
 
     IEnumerator MoveToX(float targetX)
     {
-
         PlayRun();
         while (Mathf.Abs(transform.position.x - targetX) > stopDistance)
         {
@@ -466,7 +515,6 @@ public class ClickMoveXWithSpine : MonoBehaviour
         movementCoroutine = null;
         // clear movement target (we're exactly at target now)
         movementTargetX = transform.position.x;
-
     }
 
     private void SetFacing(bool right)
@@ -535,14 +583,26 @@ public class ClickMoveXWithSpine : MonoBehaviour
     void NextQuestion()
     {
         if (isDead) return;
-        if (currentQuestionIndex >= maxQuestions)
+
+        // If we're in parity and parityCorrectCount already reached requirement, start prime
+        if (phase == QuestionPhase.Parity && parityCorrectCount >= parityCorrectRequired)
         {
-            EndQuestions();
-            return;
+            SwitchToPrimePhase();
         }
 
-        currentQuestionIndex++;
-        GenerateAndShowNumber();
+        if (phase == QuestionPhase.Parity)
+        {
+            GenerateAndShowNumber();
+        }
+        else if (phase == QuestionPhase.Prime)
+        {
+            if (primeCorrectCount >= primeCorrectRequired)
+            {
+                FinishQuestions();
+                return;
+            }
+            GenerateAndShowNumber();
+        }
     }
 
     void GenerateAndShowNumber()
@@ -574,13 +634,25 @@ public class ClickMoveXWithSpine : MonoBehaviour
             });
         }
 
-        // Enable buttons for answers
+        // Enable appropriate buttons for answers depending on phase
         acceptingAnswer = true;
-        if (oddButton != null) oddButton.interactable = true;
-        if (primeButton != null) primeButton.interactable = true;
-        if (evenButton != null) evenButton.interactable = true;
+        if (phase == QuestionPhase.Parity)
+        {
+            parityQuestionIndex++;
+            if (oddButton != null) oddButton.interactable = true;
+            if (evenButton != null) evenButton.interactable = true;
+            if (primeButton != null) primeButton.interactable = false;
+            if (questionText != null) questionText.text = $"Question {parityQuestionIndex}/{parityCorrectRequired}: Odd or Even?";
+        }
+        else if (phase == QuestionPhase.Prime)
+        {
+            primeQuestionIndex++;
+            if (oddButton != null) oddButton.interactable = true;
+            if (evenButton != null) evenButton.interactable = true;
+            if (primeButton != null) primeButton.interactable = false;
+            if (questionText != null) questionText.text = $"Question {primeQuestionIndex}/{primeCorrectRequired}: Is it prime?";
+        }
     }
-
 
     // PUBLIC methods to assign in Button.OnClick via Inspector
     public void OnOddPressed() { HandleChoice(0); }
@@ -591,55 +663,70 @@ public class ClickMoveXWithSpine : MonoBehaviour
     void HandleChoice(int buttonIndex)
     {
         if (isDead) return;
-        //   Debug.Log("Button pressed idx=" + buttonIndex + " acceptingAnswer=" + acceptingAnswer);
         if (!acceptingAnswer) return;
 
         bool correct = false;
-        if (buttonIndex == 0) correct = (currentNumber % 2 != 0);
-        else if (buttonIndex == 1) correct = IsPrime(currentNumber);
-        else if (buttonIndex == 2) correct = (currentNumber % 2 == 0);
+
+        if (phase == QuestionPhase.Parity)
+        {
+            if (buttonIndex == 0) correct = (currentNumber % 2 != 0);
+            else if (buttonIndex == 2) correct = (currentNumber % 2 == 0);
+            else correct = false;
+        }
+        else if (phase == QuestionPhase.Prime)
+        {
+            if (buttonIndex == 0) // Yes => prime
+                correct = IsPrime(currentNumber);
+            else if (buttonIndex == 2) // No => not prime
+                correct = !IsPrime(currentNumber);
+        }
+
         if (correct)
         {
             AudioManager.Instance.CorrectAnswer();
-            //    Debug.Log($"Answer: RIGHT (num={currentNumber})");
             ruinsProgress.OnCorrectAnswer();
-            // disable input while handling correct feedback
+ShowResultPopup("Correct!", Color.green);
+
             acceptingAnswer = false;
             if (oddButton != null) oddButton.interactable = false;
             if (primeButton != null) primeButton.interactable = false;
             if (evenButton != null) evenButton.interactable = false;
 
+            if (phase == QuestionPhase.Parity)
+                parityCorrectCount++;
+            else if (phase == QuestionPhase.Prime)
+                primeCorrectCount++;
+
+            // If parity just reached requirement, immediately switch UI to prime phase
+            if (phase == QuestionPhase.Parity && parityCorrectCount >= parityCorrectRequired)
+            {
+                SwitchToPrimePhase();
+            }
+
             // Visual feedback: flash color briefly then fade out
             if (bigNumberText != null)
             {
-                // flash cyan quickly
                 var flashSeq = DOTween.Sequence();
                 flashSeq.Append(bigNumberText.DOColor(Color.cyan, 0.12f));
                 flashSeq.Append(bigNumberText.DOColor(bigNumberOriginalColor, 0.12f));
 
-                // then fade out smoothly and hide
                 flashSeq.Append(bigNumberText.DOFade(0f, numberFadeTime).SetEase(Ease.InQuad));
                 flashSeq.OnComplete(() =>
                 {
-                    // hide after fade
                     bigNumberText.gameObject.SetActive(false);
-
-                    // proceed to next question after the configured delay
                     StartCoroutine(WaitAndNextQuestion(timeBetweenQuestions));
                 });
             }
             else
             {
-                // fallback if no bigNumberText assigned
                 StartCoroutine(WaitAndNextQuestion(timeBetweenQuestions));
-
             }
         }
-
         else
         {
             AudioManager.Instance.WrongAnswer();
-            //Debug.Log($"Answer: WRONG (num={currentNumber})");
+            ShowResultPopup("Wrong! Try again", Color.red);
+
             if (bigNumberText != null)
             {
                 var seq = DOTween.Sequence();
@@ -647,24 +734,17 @@ public class ClickMoveXWithSpine : MonoBehaviour
                 seq.Append(bigNumberText.DOColor(Color.white, 0.12f));
             }
 
-            // shake screen
             if (Camera.main != null)
             {
                 Camera.main.transform.DOShakePosition(0.25f, strength: new Vector3(0.5f, 0.5f, 0), vibrato: 20);
             }
 
-            // Example: reduce enemy attack interval by 0.35 seconds on each wrong answer
             float aggressionReduction = 0.35f;
-
-            // call on all enemies in scene (or you can maintain a list of enemies in the level)
             EnemyController[] enemies = FindObjectsOfType<EnemyController>();
             foreach (var e in enemies)
                 e.IncreaseAggression(aggressionReduction);
 
-
-
-            // ❌ Don't disable buttons, let user try again
-            // ❌ Don't advance question
+            // allow retry, do not advance question
         }
     }
 
@@ -673,7 +753,6 @@ public class ClickMoveXWithSpine : MonoBehaviour
         yield return new WaitForSeconds(delay);
         NextQuestion();
     }
-
 
     void EndQuestions()
     {
@@ -688,10 +767,8 @@ public class ClickMoveXWithSpine : MonoBehaviour
 
         if (bigNumberText != null) bigNumberText.gameObject.SetActive(false);
 
-        // stop player movement if you want them to watch enemies die / move to next scene
         canMove = false;
         DestroyAllProjectiles();
-        // find all enemies in scene and tell them to die
         EnemyController[] enemies = FindObjectsOfType<EnemyController>();
         foreach (var e in enemies)
         {
@@ -699,22 +776,55 @@ public class ClickMoveXWithSpine : MonoBehaviour
         }
         if (!isDead)
         {
-
             ruinsAnimation.Play();
-
         }
-
-        // Optionally open gate, play a celebration, start next chapter, etc.
-        // Example: StartCoroutine(OpenGateAndContinue());
     }
+
+    [Header("Door Shake Settings")]
+    public bool shakeScreenDuringDoor = true;
+    public float doorShakeStrength = 0.25f;    // inspector control for magnitude
+    public float doorShakeDuration = 4.5f;     // duration of the shake (defaults to previous value)
+    public int doorShakeVibrato = 10;          // vibrato for DOShakePosition
+
+    private Tween doorShakeTween = null;
 
     public void PlayDoorAnimation()
     {
-        doorAnimation.Play();
-        if (Camera.main != null)
+        if (doorAnimation != null)
+            doorAnimation.Play();
+
+        if (shakeScreenDuringDoor && Camera.main != null)
         {
-            Camera.main.transform.DOShakePosition(4.5f, strength: new Vector3(0.25f, 0.25f, 0), vibrato: 10);
+            if (doorShakeTween != null && doorShakeTween.IsActive()) doorShakeTween.Kill();
+            doorShakeTween = Camera.main.transform.DOShakePosition(doorShakeDuration, new Vector3(doorShakeStrength, doorShakeStrength, 0f), doorShakeVibrato, randomnessMode: ShakeRandomnessMode.Full);
+            StartCoroutine(StopDoorShakeWhenAnimationEnds());
         }
+    }
+
+    IEnumerator StopDoorShakeWhenAnimationEnds()
+    {
+        float timer = 0f;
+        float maxWait = doorShakeDuration + 0.1f;
+        while ((doorAnimation != null && doorAnimation.isPlaying) && timer < maxWait)
+        {
+            timer += Time.deltaTime;
+            yield return null;
+        }
+
+        if (doorShakeTween != null && doorShakeTween.IsActive())
+        {
+            doorShakeTween.Kill();
+            doorShakeTween = null;
+        }
+
+        yield break;
+    }
+
+    public void CameraShake(float duration, Vector3 strength, int vibrato = 20)
+    {
+        if (Camera.main == null) return;
+        DOTween.Kill(Camera.main.transform);
+        Camera.main.transform.DOShakePosition(duration, strength, vibrato, randomnessMode: ShakeRandomnessMode.Full);
     }
 
     void DestroyAllProjectiles()
@@ -755,14 +865,12 @@ public class ClickMoveXWithSpine : MonoBehaviour
     /// </summary>
     public IEnumerator GoToPortal(Vector3 portalPos, float moveSpeedOverride = -1f, float arrivalThreshold = 0.02f, float pauseAfterX = 0.12f)
     {
-        // Stop any current movement and states
         if (movementCoroutine != null)
         {
             StopCoroutine(movementCoroutine);
             movementCoroutine = null;
         }
 
-        // Stop blink and invuln visuals
         if (blinkTween != null && blinkTween.IsActive())
         {
             blinkTween.Kill();
@@ -771,34 +879,24 @@ public class ClickMoveXWithSpine : MonoBehaviour
         if (knightMaterial != null && knightMaterial.HasProperty("_FillPhase"))
             knightMaterial.SetFloat("_FillPhase", blinkMin);
 
-        // Immediately prevent gameplay input and question flow
         canMove = false;
         acceptingAnswer = false;
 
-        // Stop any typing or question coroutines if needed
-        // (If you have references to them, stop here. We assume StartCoroutine(TypeText(...)) isn't stored.)
-
-        // Face the target X
         bool faceRight = portalPos.x >= transform.position.x;
         SetFacing(faceRight);
 
-        // Use override speed if provided
         float originalSpeed = speed;
         if (moveSpeedOverride > 0f) speed = moveSpeedOverride;
 
-        // Force run animation and track movement target
         movementTargetX = portalPos.x;
         PlayRun();
 
-        // Move along X axis until reached
         while (Mathf.Abs(transform.position.x - portalPos.x) > arrivalThreshold)
         {
-            // move only in X
             float step = speed * Time.deltaTime;
             float newX = Mathf.MoveTowards(transform.position.x, portalPos.x, step);
             transform.position = new Vector3(newX, transform.position.y, transform.position.z);
 
-            // ensure no accidental rotation
             Vector3 e = transform.eulerAngles;
             e.z = 0f;
             transform.eulerAngles = e;
@@ -806,17 +904,12 @@ public class ClickMoveXWithSpine : MonoBehaviour
             yield return null;
         }
 
-        // Snap X exactly
         transform.position = new Vector3(portalPos.x, transform.position.y, portalPos.z);
 
-        // tiny pause so it feels like player arrived
         yield return new WaitForSeconds(pauseAfterX);
 
-        // Now move on Y (climb into portal). We'll play Idle (or you can change to a climb animation)
-        // Optionally face Y direction doesn't matter for X-facing, but ensure facing correct X.
         PlayIdle();
 
-        // Move Y to portal.y
         while (Mathf.Abs(transform.position.y - portalPos.y) > arrivalThreshold)
         {
             float step = speed * Time.deltaTime;
@@ -825,22 +918,77 @@ public class ClickMoveXWithSpine : MonoBehaviour
             yield return null;
         }
 
-        // Snap final position
         transform.position = new Vector3(portalPos.x, portalPos.y, portalPos.z);
 
-        // restore speed if we overrode it
         if (moveSpeedOverride > 0f) speed = originalSpeed;
 
-        // final idle (or you can trigger a 'enter portal' animation or call a level end)
         PlayBuff();
-
-        // (Optional) allow external code to continue; we keep player input disabled so the scene end can play.
-        // If you want to re-enable movement after arriving, set canMove = true here.
     }
 
-    public void CameraShake()
+ // single tween sequence handle so we can kill/restart
+private Tween resultPopupTween = null;
+
+/// <summary>
+/// Show a centered popup message (fades & pops) — auto hides.
+/// Call ShowResultPopup("Correct!", Color.green) or ShowResultPopup("Wrong! Try again", Color.red).
+/// </summary>
+public void ShowResultPopup(string message, Color color)
+{
+    if (centerResultText == null) return;
+
+    // kill previous tween
+    if (resultPopupTween != null && resultPopupTween.IsActive()) resultPopupTween.Kill();
+
+    centerResultText.gameObject.SetActive(true);
+    centerResultText.text = message;
+    centerResultText.color = new Color(color.r, color.g, color.b, 0f);
+
+    // ensure starting scale & alpha
+    centerResultText.transform.localScale = Vector3.one * 0.9f;
+
+    // build sequence
+    var seq = DOTween.Sequence();
+
+    // fade in alpha to 1 while scaling up slightly
+    seq.Append(
+        DOTween.To(() => centerResultText.color.a,
+                   x => {
+                       var c = centerResultText.color;
+                       c.a = x;
+                       centerResultText.color = c;
+                   },
+                   1f, popupFadeInTime)
+    );
+    seq.Join(centerResultText.transform.DOScale(popupScaleUp, popupScaleTime).SetEase(Ease.OutBack));
+
+    // small settle back to 1.0 scale
+    seq.Append(centerResultText.transform.DOScale(1f, 0.08f).SetEase(Ease.OutQuad));
+
+    // hold visible
+    seq.AppendInterval(popupHoldTime);
+
+    // fade out and shrink a bit
+    seq.Append(
+        DOTween.To(() => centerResultText.color.a,
+                   x => {
+                       var c = centerResultText.color;
+                       c.a = x;
+                       centerResultText.color = c;
+                   },
+                   0f, popupFadeOutTime)
+    );
+    seq.Join(centerResultText.transform.DOScale(0.9f, popupFadeOutTime));
+
+    seq.OnComplete(() =>
     {
-         
+        // make sure it's hidden and reset color alpha
+        var c = centerResultText.color;
+        c.a = 0f;
+        centerResultText.color = c;
+        centerResultText.gameObject.SetActive(false);
+    });
 
-    }
+    resultPopupTween = seq;
+}
+
 }
