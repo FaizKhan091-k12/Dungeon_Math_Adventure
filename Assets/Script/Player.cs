@@ -112,6 +112,7 @@ public float popupFadeOutTime = 0.18f;
     private int parityQuestionIndex = 0; // how many parity questions shown
     private int primeQuestionIndex = 0;  // how many prime questions shown
 
+    public GameObject you_Won_Text;
     void Awake()
     {
         Instance = this;
@@ -759,7 +760,7 @@ ShowResultPopup("Correct!", Color.green);
         MainMenuController.Instacne.audio_LevelOne.volume = 0f;
         AudioManager.Instance.LevelOver();
         Debug.Log("Level 1 questions finished.");
-
+       
         acceptingAnswer = false;
         if (oddButton != null) oddButton.interactable = false;
         if (primeButton != null) primeButton.interactable = false;
@@ -923,6 +924,7 @@ ShowResultPopup("Correct!", Color.green);
         if (moveSpeedOverride > 0f) speed = originalSpeed;
 
         PlayBuff();
+        you_Won_Text.SetActive(true);
     }
 
  // single tween sequence handle so we can kill/restart
